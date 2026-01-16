@@ -20,6 +20,7 @@ import {
   handleCloseSlash,
   handleCloseModalSubmit,
   handleReviewDm,
+  handleReviewButton, // ✅ ADDED
 } from "./tickets.js";
 
 const client = new Client({
@@ -111,17 +112,27 @@ client.on(Events.MessageCreate, async (message) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isButton()) {
+      // ✅ REVIEW BUTTON HANDLER (runs first, non-blocking)
+      try {
+        await handleReviewButton(interaction);
+      } catch (err) {
+        console.error("Review button error:", err);
+      }
+
+      // Existing support button routing
       if (interaction.customId === "support_open_ticket") {
         await handleSupportOpenButton(interaction);
       } else if (interaction.customId.startsWith("support_category:")) {
         await handleSupportCategoryButton(interaction);
       }
+
     } else if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith("support_modal:")) {
         await handleSupportModalSubmit(interaction);
       } else if (interaction.customId === "close_modal") {
         await handleCloseModalSubmit(interaction);
       }
+
     } else if (interaction.isChatInputCommand()) {
       if (interaction.commandName === "close") {
         await handleCloseSlash(interaction);
