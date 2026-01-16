@@ -1,27 +1,60 @@
-const channelCounters = new Map();
+// Per-channel message tracking
+const channelState = new Map();
+
+function buildConfig() {
+  const rawIds = process.env.REMINDER_CHANNEL_IDS || "";
+  const rawMessages = process.env.REMINDER_MESSAGES || "";
+  const threshold = Number(process.env.REMINDER_THRESHOLD || 20);
+
+  const ids = rawIds
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const msgs = rawMessages
+    .split("||") // allows multi-line messages without comma collision
+    .map((s) => s.trim());
+
+  const perChannel = new Map();
+
+  ids.forEach((id, index) => {
+    const message =
+      msgs[index] ||
+      "**Reminder:** Please follow the community rules.";
+
+    perChannel.set(id, {
+      channelId: id,
+      threshold,
+      message,
+    });
+  });
+
+  return { perChannel };
+}
 
 export function getReminderConfig() {
-  const ids =
-    process.env.REMINDER_CHANNEL_IDS?.split(",").map((id) => id.trim()) || [];
-  const threshold = Number(process.env.REMINDER_THRESHOLD || 20);
-  return { channelIds: ids, threshold };
+  return buildConfig();
 }
 
 export async function handleReminderMessage(message, config) {
-  const { channelIds, threshold } = config;
+  const { perChannel } = config;
 
-  if (!channelIds.includes(message.channel.id)) return;
+  // Only watch configured channels
+  if (!perChannel.has(message.channel.id)) return;
   if (message.author.bot) return;
 
   const key = message.channel.id;
-  const current = (channelCounters.get(key) || 0) + 1;
-  channelCounters.set(key, current);
+  const state = channelState.get(key) || { count: 0 };
+  state.count++;
 
-  if (current >= threshold) {
-    channelCounters.set(key, 0);
+  const cfg = perChannel.get(key);
 
-    await message.channel.send(
-      "🔔 **Reminder:** Please follow the HYPED community guidelines. No harassment, spam, or NSFW content."
-    );
+  if (state.count >= cfg.threshold) {
+    state.count = 0;
+
+    // Send final message
+    await message.channel.send(cfg.message);
   }
+
+  channelState.set(key, state);
 }
