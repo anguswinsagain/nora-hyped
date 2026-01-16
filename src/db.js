@@ -113,4 +113,38 @@ export function setReviewLongWarned(ticketId, warned) {
   stmt.run(warned ? 1 : 0, ticketId);
 }
 
-exp
+export function setReviewDraft(ticketId, draftText) {
+  const stmt = db.prepare(`
+    UPDATE ticket_logs
+    SET review_draft_text = ?,
+        review_state = 2,
+        review_long_warned = 0
+    WHERE id = ?
+  `);
+  stmt.run(draftText, ticketId);
+}
+
+export function clearReviewDraft(ticketId) {
+  const stmt = db.prepare(`
+    UPDATE ticket_logs
+    SET review_draft_text = NULL,
+        review_state = 1,
+        review_long_warned = 0
+    WHERE id = ?
+  `);
+  stmt.run(ticketId);
+}
+
+export function finalizeReview(ticketId, reviewText) {
+  const stmt = db.prepare(`
+    UPDATE ticket_logs
+    SET review_text = ?,
+        review_created_at = datetime('now'),
+        awaiting_review = 0,
+        review_state = 0,
+        review_draft_text = NULL,
+        review_long_warned = 0
+    WHERE id = ?
+  `);
+  stmt.run(reviewText, ticketId);
+}
