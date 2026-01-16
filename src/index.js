@@ -44,7 +44,7 @@ client.on(Events.MessageCreate, async (message) => {
   await handleReminderMessage(message, reminderConfig);
   await handleResolveCommand(message);
 
-  if (message.content === "!supportpanel") {
+  if (message.content === "!setupSupportPanel") {
     if (!SUPPORT_STAFF_ROLE_ID || !SUPPORT_PORTAL_CHANNEL_ID) {
       return message.reply(
         "Support panel is not configured. Ask an admin to set SUPPORT_STAFF_ROLE_ID and SUPPORT_PORTAL_CHANNEL_ID."
