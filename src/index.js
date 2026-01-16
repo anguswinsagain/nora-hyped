@@ -4,6 +4,7 @@ import {
   GatewayIntentBits,
   Partials,
   Events,
+  ApplicationCommandOptionType,
 } from "discord.js";
 
 import {
@@ -12,10 +13,13 @@ import {
 } from "./reminders.js";
 
 import {
-  handleSupportSelectInteraction,
-  handleSupportModalSubmit,
-  handleResolveCommand,
   sendSupportPanel,
+  handleSupportOpenButton,
+  handleSupportCategoryButton,
+  handleSupportModalSubmit,
+  handleCloseSlash,
+  handleCloseModalSubmit,
+  handleReviewDm,
 } from "./tickets.js";
 
 const client = new Client({
@@ -24,6 +28,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages,
   ],
   partials: [Partials.Channel, Partials.Message],
 });
@@ -32,17 +37,55 @@ const reminderConfig = getReminderConfig();
 
 const SUPPORT_STAFF_ROLE_ID = process.env.SUPPORT_STAFF_ROLE_ID;
 const SUPPORT_PORTAL_CHANNEL_ID = process.env.SUPPORT_PORTAL_CHANNEL_ID;
+const GUILD_ID = process.env.GUILD_ID;
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
+
+  // Register /close command in the guild
+  try {
+    if (GUILD_ID) {
+      const guild = await client.guilds.fetch(GUILD_ID);
+      await guild.commands.create({
+        name: "close",
+        description: "Close this support ticket",
+        options: [
+          {
+            name: "notes",
+            description: "Summary of how this ticket was resolved",
+            type: ApplicationCommandOptionType.String,
+            required: false,
+          },
+        ],
+      });
+      console.log("Registered /close command.");
+    }
+  } catch (err) {
+    console.error("Failed to register commands:", err);
+  }
 });
 
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
-  if (!message.guild) return;
 
+  // DMs: handle review flow
+  if (!message.guild) {
+    await handleReviewDm(client, message);
+    return;
+  }
+
+  // In-guild: reminders only for now
   await handleReminderMessage(message, reminderConfig);
-  await handleResolveCommand(message);
+});
+
+client.on(Events.MessageCreate, async (message) => {
+  // Reserved space if you ever want !commands again; currently unused.
+});
+
+// Support panel setup command (still text-based, staff only)
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
 
   if (message.content === "!setupSupportPanel") {
     if (!SUPPORT_STAFF_ROLE_ID || !SUPPORT_PORTAL_CHANNEL_ID) {
@@ -67,10 +110,22 @@ client.on(Events.MessageCreate, async (message) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
-    if (interaction.isStringSelectMenu()) {
-      await handleSupportSelectInteraction(interaction);
+    if (interaction.isButton()) {
+      if (interaction.customId === "support_open_ticket") {
+        await handleSupportOpenButton(interaction);
+      } else if (interaction.customId.startsWith("support_category:")) {
+        await handleSupportCategoryButton(interaction);
+      }
     } else if (interaction.isModalSubmit()) {
-      await handleSupportModalSubmit(interaction);
+      if (interaction.customId.startsWith("support_modal:")) {
+        await handleSupportModalSubmit(interaction);
+      } else if (interaction.customId === "close_modal") {
+        await handleCloseModalSubmit(interaction);
+      }
+    } else if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === "close") {
+        await handleCloseSlash(interaction);
+      }
     }
   } catch (err) {
     console.error("Interaction error:", err);
