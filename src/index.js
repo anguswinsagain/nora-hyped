@@ -13,6 +13,7 @@ import {
 
 import {
   handleSupportSelectInteraction,
+  handleSupportModalSubmit,
   handleResolveCommand,
   sendSupportPanel,
 } from "./tickets.js";
@@ -27,7 +28,6 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message],
 });
 
-// reminder config is based on env, built once at startup
 const reminderConfig = getReminderConfig();
 
 const SUPPORT_STAFF_ROLE_ID = process.env.SUPPORT_STAFF_ROLE_ID;
@@ -38,17 +38,12 @@ client.once(Events.ClientReady, (c) => {
 });
 
 client.on(Events.MessageCreate, async (message) => {
-  // ignore bots (including Nora)
   if (message.author.bot) return;
-  if (!message.guild) return; // ignore DMs
+  if (!message.guild) return;
 
-  // 1) per-channel reminders
   await handleReminderMessage(message, reminderConfig);
-
-  // 2) ticket resolve command
   await handleResolveCommand(message);
 
-  // 3) support panel setup command (staff-only, correct channel only)
   if (message.content === "!setupSupportPanel") {
     if (!SUPPORT_STAFF_ROLE_ID || !SUPPORT_PORTAL_CHANNEL_ID) {
       return message.reply(
@@ -56,16 +51,14 @@ client.on(Events.MessageCreate, async (message) => {
       );
     }
 
-    // must be in the designated support portal channel
     if (message.channel.id !== SUPPORT_PORTAL_CHANNEL_ID) {
       return message.reply(
         "You must run this command in the official support portal channel."
       );
     }
 
-    // must have the staff role
     if (!message.member.roles.cache.has(SUPPORT_STAFF_ROLE_ID)) {
-      return message.reply("You don't have permission to run this command.");
+      return message.reply("You do not have permission to run this command.");
     }
 
     await sendSupportPanel(message.channel);
@@ -74,7 +67,11 @@ client.on(Events.MessageCreate, async (message) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
-    await handleSupportSelectInteraction(interaction, client);
+    if (interaction.isStringSelectMenu()) {
+      await handleSupportSelectInteraction(interaction);
+    } else if (interaction.isModalSubmit()) {
+      await handleSupportModalSubmit(interaction);
+    }
   } catch (err) {
     console.error("Interaction error:", err);
   }
