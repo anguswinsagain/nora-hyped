@@ -1,6 +1,16 @@
 import Database from "better-sqlite3";
+import fs from "node:fs";
+import path from "node:path";
 
-const db = new Database(process.env.TICKETS_DB_PATH || "tickets.db");
+const dbPath = process.env.TICKETS_DB_PATH || "tickets.db";
+const dir = path.dirname(dbPath);
+
+// create directory if needed and not just "."
+if (dir && dir !== "." && !fs.existsSync(dir)) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+const db = new Database(dbPath);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS ticket_logs (
@@ -23,10 +33,14 @@ export function logTicketCreation({ channelId, userId, category }) {
   ).run(channelId, userId, category);
 }
 
-export function logTicketResolution({ channelId, moderatorId, resolutionText }) {
+export function logTicketResolution({
+  channelId,
+  moderatorId,
+  resolutionText,
+}) {
   db.prepare(
     `UPDATE ticket_logs
-     SET moderator_id=?, resolution_text=?, closed_at=datetime('now')
-     WHERE ticket_channel_id=?`
+     SET moderator_id = ?, resolution_text = ?, closed_at = datetime('now')
+     WHERE ticket_channel_id = ?`
   ).run(moderatorId, resolutionText, channelId);
 }
