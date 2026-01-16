@@ -25,22 +25,29 @@ db.exec(`
     closed_at TEXT,
     awaiting_review INTEGER DEFAULT 0,
     review_text TEXT,
-    review_created_at TEXT
+    review_created_at TEXT,
+
+    review_draft_text TEXT,
+    review_state INTEGER DEFAULT 0,
+    review_long_warned INTEGER DEFAULT 0
   );
 `);
 
-// Safe migrations (in case older versions exist)
 const addColumn = (name, def) => {
   try {
     db.exec(`ALTER TABLE ticket_logs ADD COLUMN ${name} ${def};`);
   } catch {
-    // ignore if it already exists
+    // ignore if already exists
   }
 };
 
+// Safe migrations
 addColumn("awaiting_review", "INTEGER DEFAULT 0");
 addColumn("review_text", "TEXT");
 addColumn("review_created_at", "TEXT");
+addColumn("review_draft_text", "TEXT");
+addColumn("review_state", "INTEGER DEFAULT 0");
+addColumn("review_long_warned", "INTEGER DEFAULT 0");
 
 export function createTicket({ channelId, userId, category, initialDescription }) {
   const stmt = db.prepare(`
@@ -76,13 +83,14 @@ export function closeTicket({ channelId, moderatorId, resolutionText }) {
   const stmt = db.prepare(`
     UPDATE ticket_logs
     SET moderator_id = ?, resolution_text = ?, closed_at = datetime('now'),
-        awaiting_review = 1
+        awaiting_review = 1,
+        review_state = 1,
+        review_long_warned = 0,
+        review_draft_text = NULL
     WHERE ticket_channel_id = ? AND closed_at IS NULL
   `);
 
   stmt.run(moderatorId, resolutionText || null, channelId);
-
-  // Return updated row
   return getTicketByChannelId(channelId);
 }
 
@@ -96,12 +104,13 @@ export function getPendingReviewTicketForUser(userId) {
   return stmt.get(userId) || null;
 }
 
-export function saveReview({ ticketId, reviewText }) {
+export function setReviewLongWarned(ticketId, warned) {
   const stmt = db.prepare(`
     UPDATE ticket_logs
-    SET review_text = ?, review_created_at = datetime('now'),
-        awaiting_review = 0
+    SET review_long_warned = ?
     WHERE id = ?
   `);
-  stmt.run(reviewText, ticketId);
+  stmt.run(warned ? 1 : 0, ticketId);
 }
+
+exp
