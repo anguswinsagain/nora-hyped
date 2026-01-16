@@ -175,13 +175,26 @@ export async function handleSupportModalSubmit(interaction) {
     .replace(/[^a-z0-9-_]/g, "-")
     .slice(0, 90);
 
+  const botId = interaction.client.user.id;
+
   const permissionOverwrites = [
+    // Everyone cannot see the ticket
     {
       id: guild.roles.everyone.id,
       deny: [PermissionFlagsBits.ViewChannel],
     },
+    // The user who opened the ticket
     {
       id: user.id,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+      ],
+    },
+    // Nora (the bot) needs to see and send in the channel
+    {
+      id: botId,
       allow: [
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.SendMessages,
@@ -207,6 +220,7 @@ export async function handleSupportModalSubmit(interaction) {
     parent: parentCategoryId || undefined,
     permissionOverwrites,
   });
+
 
   // Log creation with initial description
   logTicketCreation({
