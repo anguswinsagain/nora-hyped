@@ -5,13 +5,13 @@ import path from "node:path";
 const dbPath = process.env.TICKETS_DB_PATH || "tickets.db";
 const dir = path.dirname(dbPath);
 
-// create directory if needed and not just "."
 if (dir && dir !== "." && !fs.existsSync(dir)) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
 const db = new Database(dbPath);
 
+// Base table
 db.exec(`
   CREATE TABLE IF NOT EXISTS ticket_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,17 +20,30 @@ db.exec(`
     category TEXT,
     moderator_id TEXT,
     resolution_text TEXT,
+    initial_description TEXT,
     created_at TEXT,
     closed_at TEXT
   );
 `);
 
-export function logTicketCreation({ channelId, userId, category }) {
+// In case the table existed without initial_description before, try to add it
+try {
+  db.exec(`ALTER TABLE ticket_logs ADD COLUMN initial_description TEXT;`);
+} catch {
+  // ignore if it already exists
+}
+
+export function logTicketCreation({
+  channelId,
+  userId,
+  category,
+  initialDescription,
+}) {
   db.prepare(
     `INSERT INTO ticket_logs
-     (ticket_channel_id, user_id, category, created_at)
-     VALUES (?, ?, ?, datetime('now'))`
-  ).run(channelId, userId, category);
+     (ticket_channel_id, user_id, category, initial_description, created_at)
+     VALUES (?, ?, ?, ?, datetime('now'))`
+  ).run(channelId, userId, category, initialDescription || null);
 }
 
 export function logTicketResolution({
